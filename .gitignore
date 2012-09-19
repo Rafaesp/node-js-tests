@@ -1,3 +1,9 @@
+.project
+.metadata
+.settings
+
+gen
+bin
 *.class
 
 # Package Files #
