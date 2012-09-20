@@ -29,13 +29,18 @@ io.sockets.on('connection', function (socket) {
 });
 
 function getNewId(){
-	for(var i=0;i<20;++i){
+	for(var i=0;i<2000;++i){
 		if(users[i] == null){
 			return i;
 		}
 	}
-	console.log("Mas de 20 personas");
-	return 21;
+	
+	console.log("Mas de 2000 personas");
+	
+	for(var i=0;i<1990;++i){
+		users[i] == null;
+	}
+	return 0;
 }
 
 
