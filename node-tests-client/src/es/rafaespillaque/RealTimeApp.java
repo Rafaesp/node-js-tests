@@ -27,18 +27,22 @@ import com.badlogic.gdx.math.Vector2;
 public class RealTimeApp implements ApplicationListener {
 	private SocketIO socket;
 	private SpriteBatch batcher;
-	private HashMap<Integer, Vector2> users;
-	private Vector2 user;
-	private int id;
+	private HashMap<Integer, Model> users;
+	private Model user;
+	private int id = -1;
 	private MyCallbackAdapter callback;
 	private Vector2 pointer;
-
+	private final float dt = 0.01f;
+	private float accumulator = 0f;
+	
+	private int count = 0;
+	
 	@Override
 	public void create() {
 		batcher = new SpriteBatch();
-		users = new HashMap<Integer, Vector2>();
-		user = new Vector2();
-		user.set(Gdx.graphics.getWidth() / 2, Gdx.graphics.getHeight() / 2);
+		users = new HashMap<Integer, Model>();
+		user = new Model(true);
+		user.pos.set(Gdx.graphics.getWidth() / 2, Gdx.graphics.getHeight() / 2);
 		pointer = new Vector2();
 		
 		Assets.load();
@@ -49,46 +53,83 @@ public class RealTimeApp implements ApplicationListener {
 
 	@Override
 	public void render() {
-		update();
+		float frameTime = Gdx.graphics.getDeltaTime();
+		accumulator += frameTime;
+		update(frameTime);
 		present();
 	}
 
-	private void update() {
-		if(Gdx.input.isKeyPressed(Input.Keys.LEFT) ||
-		   Gdx.input.isKeyPressed(Input.Keys.RIGHT) ||
-		   Gdx.input.isKeyPressed(Input.Keys.UP) ||
-		   Gdx.input.isKeyPressed(Input.Keys.DOWN) || 
-		   Gdx.input.isTouched()){
-			
-			pointer.set(Gdx.input.getX(), Gdx.input.getY());
-			
-			if (Gdx.input.isKeyPressed(Input.Keys.LEFT)) {
-				user.x -= 2f;
-			}
-			if (Gdx.input.isKeyPressed(Input.Keys.RIGHT)) {
-				user.x += 2f;
-			}
-			if (Gdx.input.isKeyPressed(Input.Keys.UP)) {
-				user.y += 2f;
-			}
-			if (Gdx.input.isKeyPressed(Input.Keys.DOWN)) {
-				user.y -= 2f;
-			}
-			if(pointer.x > 3*Gdx.graphics.getWidth()/4){
-				user.x += 2f;
-			}if(pointer.x < Gdx.graphics.getWidth()/4){
-				user.x -= 2f;
-			}if(pointer.y > 3*Gdx.graphics.getHeight()/4){
-				user.y -= 2f;
-			}if(pointer.y < Gdx.graphics.getHeight()/4){
-				user.y += 2f;
-			}
-			
-			
-			sendPos();
+	private void update(float frameTime) {
+		user.dir.set(0f, 0f);
+		if(count < 30)
+			user.dir.x = 1;
+		
+		if(count < 40)
+			System.out.println(user.pos.x);
+		count++;
+//		boolean keys = false;
+//		boolean touched = checkScreen();
+//		if (!touched) {
+//			keys = checkKeys();
+//		}
+//		if (touched || keys) {
+//			sendPos();
+//		}
+		while(accumulator >= dt) {
+			user.update(dt);
+//			for(Model user : users.values()){
+//				user.update(dt);
+//			}
+			accumulator -= dt;
 		}
 		
 	}
+	
+	private boolean checkScreen() {
+		if (Gdx.input.isTouched()) {
+
+			pointer.set(Gdx.input.getX(), Gdx.input.getY());
+
+			if (pointer.x > 3 * Gdx.graphics.getWidth() / 4) {
+				user.dir.x = 1f;
+			}
+			if (pointer.x < Gdx.graphics.getWidth() / 4) {
+				user.dir.x = -1f;
+			}
+			if (pointer.y > 3 * Gdx.graphics.getHeight() / 4) {
+				user.dir.y = -1f;
+			}
+			if (pointer.y < Gdx.graphics.getHeight() / 4) {
+				user.dir.y = 1f;
+			}
+			return true;
+		}
+		return false;
+	}
+	
+	private boolean checkKeys() {
+		if (Gdx.input.isKeyPressed(Input.Keys.LEFT)
+				|| Gdx.input.isKeyPressed(Input.Keys.RIGHT)
+				|| Gdx.input.isKeyPressed(Input.Keys.UP)
+				|| Gdx.input.isKeyPressed(Input.Keys.DOWN)) {
+
+			if (Gdx.input.isKeyPressed(Input.Keys.LEFT)) {
+				user.dir.x = -1f;
+			}
+			if (Gdx.input.isKeyPressed(Input.Keys.RIGHT)) {
+				user.dir.x = 1f;
+			}
+			if (Gdx.input.isKeyPressed(Input.Keys.UP)) {
+				user.dir.y = 1f;
+			}
+			if (Gdx.input.isKeyPressed(Input.Keys.DOWN)) {
+				user.dir.y = -1f;
+			}
+			return true;
+		}
+		return false;
+	}
+	
 
 	private void present() {
 		GL10 gl = Gdx.graphics.getGL10();
@@ -96,9 +137,9 @@ public class RealTimeApp implements ApplicationListener {
 		gl.glClear(GL10.GL_COLOR_BUFFER_BIT);
 
 		batcher.begin();
-		batcher.draw(Assets.redCircle, user.x, user.y);
-		for(Vector2 user : users.values()){
-			batcher.draw(Assets.blueCircle, user.x, user.y);
+		user.render(batcher);
+		for(Model user : users.values()){
+			user.render(batcher);
 		}
 		batcher.end();
 	}
@@ -139,12 +180,15 @@ public class RealTimeApp implements ApplicationListener {
 	}
 
 	private void sendPos() {
-		try {
-			String json = "{'x':" + user.x + " ,'y':" + user.y + "}";
+		if(id != -1) {
+			try {
+				String json = "{'x':" + user.pos.x + " ,'y':" + user.pos.y
+						+ "}";
 
-			socket.emit("newPos", new JSONObject(json));
-		} catch (JSONException e) {
-			e.printStackTrace();
+				socket.emit("newPos", new JSONObject(json));
+			} catch (JSONException e) {
+				e.printStackTrace();
+			}
 		}
 	}
 	
@@ -152,7 +196,10 @@ public class RealTimeApp implements ApplicationListener {
 		try {
 			float x = Float.parseFloat(jsonObject.getString("x"));
 			float y = Float.parseFloat(jsonObject.getString("y"));
-			users.put(newPosId, new Vector2(x, y));
+			Model m = new Model(false);
+			m.pos.set(x, y);
+			users.put(newPosId, m);
+			
 		
 		} catch (NumberFormatException e) {
 			e.printStackTrace();
